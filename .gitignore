@@ -1,0 +1,26 @@
+# Data files — too large for GitHub
+data/
+creditcardfraud.zip
+
+# ONNX Runtime — binary files
+onnxruntime/
+onnxruntime.zip
+onnxruntime.dll
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Go build artifacts
+*.exe
+*.test
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
