@@ -73,11 +73,11 @@ Start producer in a new terminal:
 - [x] Stream processing pipeline
 - [x] Redis sliding window feature store
 - [x] Prometheus and Grafana observability
-- [ ] Real ML model with ONNX
-- [ ] Behavioral fingerprinting per card
-- [ ] Adaptive fraud thresholds
-- [ ] Graph-based fraud ring detection
-- [ ] REST API with explainability
+- [x] Real ML model with ONNX
+- [x] Behavioral fingerprinting per card
+- [x] Adaptive fraud thresholds
+- [x] Graph-based fraud ring detection
+- [x] REST API with explainability
 
 ## Author
 Adhiswauran V — B.Tech Computer Science and AI
