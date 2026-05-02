@@ -1,0 +1,12 @@
+{
+  "provider": "python",
+  "install": {
+    "cmd": "pip install -r deploy/requirements.txt"
+  },
+  "build": {
+    "cmd": ""
+  },
+  "start": {
+    "cmd": "python deploy/app.py"
+  }
+}
