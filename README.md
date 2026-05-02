@@ -2,6 +2,25 @@
 
 A high-performance fraud detection system built with Go, Redpanda, and Redis. Detects fraudulent credit card transactions in **under 1 millisecond** — 50x faster than the 50ms industry requirement.
 
+## 🌐 Live API
+
+The fraud detection engine is deployed and live. Try it now:
+
+**Base URL:** `https://fraud-detection-engine-production-e9e3.up.railway.app`
+
+**Quick test:**
+```bash
+curl -X POST https://fraud-detection-engine-production-e9e3.up.railway.app/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{"card_id":"card-42","amount_usd":1800,"merchant_id":"merch-001","country_code":"RU"}'
+```
+
+**Endpoints:**
+- `POST /evaluate` — evaluate a transaction for fraud
+- `GET /health` — health check and live stats
+- `GET /` — API documentation
+
+
 ## Live Dashboard
 ![Dashboard](assets/dashboard.png)
 
