@@ -2,8 +2,5 @@
   "provider": "python",
   "install": {
     "cmd": "pip install -r deploy/requirements.txt"
-  },
-  "start": {
-    "cmd": "python deploy/app.py"
   }
 }
