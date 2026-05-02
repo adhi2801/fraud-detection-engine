@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fraud Detection Engine</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; background: #0d1117; color: #e6edf3; }
+        h1 { color: #58a6ff; }
+        input, select { width: 100%; padding: 10px; margin: 8px 0; background: #161b22; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; }
+        button { width: 100%; padding: 12px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #2ea043; }
+        #result { margin-top: 20px; padding: 20px; background: #161b22; border-radius: 6px; display: none; }
+        .fraud { border-left: 4px solid #f85149; }
+        .safe { border-left: 4px solid #3fb950; }
+        .score { font-size: 48px; font-weight: bold; text-align: center; }
+        .fraud-score { color: #f85149; }
+        .safe-score { color: #3fb950; }
+        .reasons { margin-top: 15px; }
+        .reason { padding: 8px; margin: 5px 0; background: #0d1117; border-radius: 4px; }
+        label { color: #8b949e; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <h1>🚨 Real-Time Fraud Detection Engine</h1>
+    <p style="color:#8b949e">XGBoost model trained on 284,807 real transactions — AUC-ROC: 0.98</p>
+
+    <label>Card ID</label>
+    <input type="text" id="card_id" value="card-42" />
+
+    <label>Amount (USD)</label>
+    <input type="number" id="amount" value="1800" />
+
+    <label>Merchant ID</label>
+    <input type="text" id="merchant" value="merch-001" />
+
+    <label>Country Code</label>
+    <select id="country">
+        <option value="US">US — United States</option>
+        <option value="RU" selected>RU — Russia</option>
+        <option value="IN">IN — India</option>
+        <option value="DE">DE — Germany</option>
+        <option value="BR">BR — Brazil</option>
+        <option value="CN">CN — China</option>
+        <option value="GB">GB — United Kingdom</option>
+    </select>
+
+    <button onclick="evaluate()">Evaluate Transaction</button>
+
+    <div id="result">
+        <div class="score" id="score"></div>
+        <div id="verdict" style="text-align:center;font-size:24px;margin:10px 0"></div>
+        <div class="reasons" id="reasons"></div>
+        <div style="margin-top:15px;color:#8b949e;font-size:13px" id="meta"></div>
+    </div>
+
+    <script>
+        async function evaluate() {
+            const body = {
+                card_id: document.getElementById('card_id').value,
+                amount_usd: parseFloat(document.getElementById('amount').value),
+                merchant_id: document.getElementById('merchant').value,
+                country_code: document.getElementById('country').value
+            };
+
+            const res = await fetch('/evaluate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body)
+            });
+
+            const data = await res.json();
+            const result = document.getElementById('result');
+            const score = (data.fraud_score * 100).toFixed(1);
+
+            result.style.display = 'block';
+            result.className = data.is_fraud ? 'fraud' : 'safe';
+
+            document.getElementById('score').innerHTML =
+                `<span class="${data.is_fraud ? 'fraud-score' : 'safe-score'}">${score}%</span>`;
+
+            document.getElementById('verdict').innerHTML =
+                data.is_fraud ? '🚨 FRAUD DETECTED' : '✅ TRANSACTION SAFE';
+
+            const reasonsHtml = data.reasons.map(r =>
+                `<div class="reason">• ${r}</div>`
+            ).join('');
+            document.getElementById('reasons').innerHTML = reasonsHtml;
+
+            document.getElementById('meta').innerHTML =
+                `Threshold: ${(data.threshold*100).toFixed(0)}% | ML Score: ${(data.ml_score*100).toFixed(1)}% | Latency: ${data.latency_ms}ms`;
+        }
+    </script>
+</body>
+</html>

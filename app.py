@@ -4,7 +4,7 @@ import uuid
 import json
 from collections import defaultdict
 from datetime import datetime
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import onnxruntime as rt
 import numpy as np
 
@@ -239,6 +239,10 @@ def home():
             "country_code": "RU"
         }
     })
+
+@app.route("/ui", methods=["GET"])
+def ui():
+    return render_template("index.html")
 
 if __name__ == "__main__":
     from waitress import serve
