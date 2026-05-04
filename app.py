@@ -242,7 +242,262 @@ def home():
 
 @app.route("/ui", methods=["GET"])
 def ui():
-    return render_template("index.html")
+    html = """<!DOCTYPE html>
+<html>
+<head>
+    <title>Fraud Detection Engine</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0a0e1a; color: #e2e8f0; min-height: 100vh; }
+        
+        .header { background: linear-gradient(135deg, #1a1f36 0%, #0d1117 100%); padding: 40px 20px; text-align: center; border-bottom: 1px solid #1e2d3d; }
+        .header h1 { font-size: 2.2em; background: linear-gradient(90deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
+        .header p { color: #64748b; font-size: 0.95em; }
+        .badge { display: inline-block; background: #1e3a5f; color: #60a5fa; padding: 4px 12px; border-radius: 20px; font-size: 0.8em; margin: 4px; border: 1px solid #2563eb44; }
+
+        .container { max-width: 1000px; margin: 40px auto; padding: 0 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        
+        .card { background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 28px; }
+        .card h2 { color: #94a3b8; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px; }
+        
+        label { display: block; color: #64748b; font-size: 0.85em; margin-bottom: 6px; margin-top: 14px; }
+        input, select { width: 100%; padding: 12px 14px; background: #0d1117; color: #e2e8f0; border: 1px solid #1f2937; border-radius: 10px; font-size: 0.95em; transition: border 0.2s; }
+        input:focus, select:focus { outline: none; border-color: #3b82f6; }
+        select option { background: #111827; }
+        
+        .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+        .preset-btn { padding: 8px; background: #0d1117; border: 1px solid #1f2937; border-radius: 8px; color: #94a3b8; cursor: pointer; font-size: 0.8em; transition: all 0.2s; }
+        .preset-btn:hover { border-color: #3b82f6; color: #60a5fa; }
+        .preset-fraud { border-color: #7f1d1d44; color: #fca5a5; }
+        .preset-fraud:hover { border-color: #ef4444; color: #ef4444; }
+        
+        .btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 1em; font-weight: 600; margin-top: 20px; transition: opacity 0.2s; }
+        .btn:hover { opacity: 0.9; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .result-card { display: none; }
+        .score-display { text-align: center; padding: 30px 0; }
+        .score-number { font-size: 5em; font-weight: 800; line-height: 1; }
+        .score-label { font-size: 1.1em; margin-top: 8px; font-weight: 600; }
+        .fraud-color { color: #ef4444; }
+        .safe-color { color: #22c55e; }
+        
+        .meter { background: #1f2937; border-radius: 10px; height: 8px; margin: 16px 0; overflow: hidden; }
+        .meter-fill { height: 100%; border-radius: 10px; transition: width 0.8s ease; }
+        .meter-fraud { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+        .meter-safe { background: linear-gradient(90deg, #22c55e, #16a34a); }
+
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 16px 0; }
+        .stat { background: #0d1117; border-radius: 10px; padding: 12px; text-align: center; }
+        .stat-value { font-size: 1.3em; font-weight: 700; color: #60a5fa; }
+        .stat-label { font-size: 0.75em; color: #64748b; margin-top: 2px; }
+
+        .reasons { margin-top: 16px; }
+        .reason { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: #0d1117; border-radius: 8px; margin: 6px 0; font-size: 0.9em; color: #94a3b8; }
+        .reason-icon { font-size: 1em; flex-shrink: 0; }
+
+        .history { margin-top: 16px; }
+        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-radius: 8px; margin: 4px 0; font-size: 0.85em; background: #0d1117; }
+        .tag { padding: 2px 8px; border-radius: 4px; font-size: 0.75em; font-weight: 600; }
+        .tag-fraud { background: #7f1d1d; color: #fca5a5; }
+        .tag-safe { background: #14532d; color: #86efac; }
+
+        .info-bar { background: #111827; border-top: 1px solid #1f2937; padding: 16px 20px; text-align: center; color: #374151; font-size: 0.8em; margin-top: 40px; }
+        .info-bar a { color: #3b82f6; text-decoration: none; }
+
+        @media (max-width: 700px) { .container { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>🚨 Fraud Detection Engine</h1>
+    <p>Real-time credit card fraud detection powered by Machine Learning</p>
+    <div style="margin-top:12px">
+        <span class="badge">XGBoost</span>
+        <span class="badge">AUC-ROC: 0.98</span>
+        <span class="badge">284,807 transactions</span>
+        <span class="badge">Behavioral Fingerprinting</span>
+        <span class="badge">Graph Ring Detection</span>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Input Card -->
+    <div class="card">
+        <h2>Transaction Details</h2>
+
+        <p style="color:#64748b;font-size:0.85em;margin-bottom:12px">Quick presets:</p>
+        <div class="presets">
+            <button class="preset-btn" onclick="setPreset('normal')">✅ Normal Purchase</button>
+            <button class="preset-btn preset-fraud" onclick="setPreset('fraud1')">🚨 High Amount Abroad</button>
+            <button class="preset-btn preset-fraud" onclick="setPreset('fraud2')">🚨 Velocity Attack</button>
+            <button class="preset-btn" onclick="setPreset('travel')">✈️ Legitimate Travel</button>
+        </div>
+
+        <label>Card ID</label>
+        <input type="text" id="card_id" value="card-42" placeholder="e.g. card-42" />
+
+        <label>Amount (USD)</label>
+        <input type="number" id="amount" value="85" placeholder="e.g. 1800" />
+
+        <label>Merchant ID</label>
+        <input type="text" id="merchant" value="merch-001" placeholder="e.g. merch-001" />
+
+        <label>Country Code</label>
+        <select id="country">
+            <option value="US" selected>🇺🇸 US — United States</option>
+            <option value="IN">🇮🇳 IN — India</option>
+            <option value="GB">🇬🇧 GB — United Kingdom</option>
+            <option value="DE">🇩🇪 DE — Germany</option>
+            <option value="RU">🇷🇺 RU — Russia</option>
+            <option value="BR">🇧🇷 BR — Brazil</option>
+            <option value="CN">🇨🇳 CN — China</option>
+        </select>
+
+        <button class="btn" onclick="evaluate()" id="evalBtn">Evaluate Transaction →</button>
+
+        <div class="history" id="history" style="display:none">
+            <p style="color:#64748b;font-size:0.8em;margin:16px 0 8px">Recent evaluations:</p>
+            <div id="history-list"></div>
+        </div>
+    </div>
+
+    <!-- Result Card -->
+    <div class="card result-card" id="result">
+        <h2>Detection Result</h2>
+
+        <div class="score-display">
+            <div class="score-number" id="score-num">--</div>
+            <div class="score-label" id="score-label">Fraud Score</div>
+        </div>
+
+        <div class="meter">
+            <div class="meter-fill" id="meter" style="width:0%"></div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat">
+                <div class="stat-value" id="stat-ml">--</div>
+                <div class="stat-label">ML Score</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="stat-anomaly">--</div>
+                <div class="stat-label">Behavioral</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="stat-latency">--</div>
+                <div class="stat-label">Latency</div>
+            </div>
+        </div>
+
+        <div class="reasons" id="reasons"></div>
+    </div>
+</div>
+
+<div class="info-bar">
+    Built by <strong>Adhiswauran V</strong> &nbsp;|&nbsp;
+    <a href="/health">API Health</a> &nbsp;|&nbsp;
+    <a href="https://github.com/adhi2801/fraud-detection-engine" target="_blank">GitHub</a> &nbsp;|&nbsp;
+    POST /evaluate for API access
+</div>
+
+<script>
+    const history = [];
+
+    function setPreset(type) {
+        const presets = {
+            normal: { card: 'card-10', amount: 45, merchant: 'merch-003', country: 'US' },
+            fraud1: { card: 'card-42', amount: 2400, merchant: 'merch-001', country: 'RU' },
+            fraud2: { card: 'card-99', amount: 150, merchant: 'merch-002', country: 'CN' },
+            travel: { card: 'card-55', amount: 320, merchant: 'merch-004', country: 'GB' }
+        };
+        const p = presets[type];
+        document.getElementById('card_id').value = p.card;
+        document.getElementById('amount').value = p.amount;
+        document.getElementById('merchant').value = p.merchant;
+        document.getElementById('country').value = p.country;
+    }
+
+    async function evaluate() {
+        const btn = document.getElementById('evalBtn');
+        btn.disabled = true;
+        btn.textContent = 'Evaluating...';
+
+        const body = {
+            card_id: document.getElementById('card_id').value,
+            amount_usd: parseFloat(document.getElementById('amount').value),
+            merchant_id: document.getElementById('merchant').value,
+            country_code: document.getElementById('country').value
+        };
+
+        try {
+            const res = await fetch('/evaluate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            showResult(data, body);
+            addHistory(body, data);
+        } catch(e) {
+            alert('Error calling API: ' + e.message);
+        }
+
+        btn.disabled = false;
+        btn.textContent = 'Evaluate Transaction →';
+    }
+
+    function showResult(data, req) {
+        const resultEl = document.getElementById('result');
+        resultEl.style.display = 'block';
+
+        const score = Math.round(data.fraud_score * 100);
+        const isFraud = data.is_fraud;
+
+        document.getElementById('score-num').textContent = score + '%';
+        document.getElementById('score-num').className = 'score-number ' + (isFraud ? 'fraud-color' : 'safe-color');
+        document.getElementById('score-label').textContent = isFraud ? '🚨 FRAUD DETECTED' : '✅ TRANSACTION SAFE';
+        document.getElementById('score-label').style.color = isFraud ? '#ef4444' : '#22c55e';
+
+        const meter = document.getElementById('meter');
+        meter.style.width = score + '%';
+        meter.className = 'meter-fill ' + (isFraud ? 'meter-fraud' : 'meter-safe');
+
+        document.getElementById('stat-ml').textContent = Math.round(data.ml_score * 100) + '%';
+        document.getElementById('stat-anomaly').textContent = Math.round(data.behavioral_anomaly * 100) + '%';
+        document.getElementById('stat-latency').textContent = data.latency_ms + 'ms';
+
+        const icons = ['⚡', '🌍', '💳', '🔄', '📊'];
+        const reasonsHtml = data.reasons.map((r, i) =>
+            `<div class="reason"><span class="reason-icon">${icons[i] || '•'}</span>${r}</div>`
+        ).join('');
+        document.getElementById('reasons').innerHTML = reasonsHtml;
+    }
+
+    function addHistory(req, data) {
+        const list = document.getElementById('history-list');
+        const histEl = document.getElementById('history');
+        histEl.style.display = 'block';
+
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.innerHTML = `
+            <span>${req.card_id} — $${req.amount_usd} — ${req.country_code}</span>
+            <span class="tag ${data.is_fraud ? 'tag-fraud' : 'tag-safe'}">${data.is_fraud ? 'FRAUD' : 'SAFE'}</span>
+        `;
+        list.insertBefore(item, list.firstChild);
+        if (list.children.length > 5) list.removeChild(list.lastChild);
+    }
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Enter') evaluate();
+    });
+</script>
+</body>
+</html>"""
+    return html
 
 if __name__ == "__main__":
     from waitress import serve
