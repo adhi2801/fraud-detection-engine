@@ -99,4 +99,4 @@ Start producer in a new terminal:
 - [x] REST API with explainability
 
 ## Author
-Adhiswauran V — B.Tech Computer Science and AI
+Adhiswauran V — B.Tech Computer Science AI & ML
