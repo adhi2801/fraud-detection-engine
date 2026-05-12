@@ -272,7 +272,7 @@ def ui():
         .preset-fraud { border-color: #7f1d1d44; color: #fca5a5; }
         .preset-fraud:hover { border-color: #ef4444; color: #ef4444; }
         
-        .btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 1em; font-weight: 600; margin-top: 20px; transition: opacity 0.2s; }
+        .btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 1em; font-weight: 600; margin-top: 20px; transition: opacity 0.2s; position: relative; z-index: 100; }
         .btn:hover { opacity: 0.9; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
