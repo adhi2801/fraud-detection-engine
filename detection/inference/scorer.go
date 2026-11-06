@@ -74,6 +74,12 @@ func (s *Scorer) Score(f shared.Features) (float32, bool) {
 	}
 	defer resp.Body.Close()
 
+	// 422 means no bank features (V1-V28) were sent, which is the case for the synthetic producer traffic;
+	// any non-200 answer must not be decoded as a zero score
+	if resp.StatusCode != http.StatusOK {
+		return s.ruleBasedScore(f)
+	}
+
 	var result scoreResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return s.ruleBasedScore(f)

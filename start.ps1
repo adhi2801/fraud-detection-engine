@@ -14,17 +14,17 @@ Write-Host "Topics ready." -ForegroundColor Green
 
 # Step 3 — Start inference server
 Write-Host "`n[3/5] Starting ML inference server on :8888..." -ForegroundColor Cyan
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd C:\projects\fraud-engine; python inference_server.py"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PSScriptRoot'; python inference_server.py"
 Start-Sleep -Seconds 3
 
 # Step 4 — Start detection service
 Write-Host "`n[4/5] Starting detection service on :2112..." -ForegroundColor Cyan
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd C:\projects\fraud-engine; go run detection\main.go"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PSScriptRoot'; go run detection\main.go"
 Start-Sleep -Seconds 3
 
 # Step 5 — Start API server
 Write-Host "`n[5/5] Starting REST API on :8090..." -ForegroundColor Cyan
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd C:\projects\fraud-engine; go run api\main.go"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PSScriptRoot'; go run api\main.go"
 Start-Sleep -Seconds 2
 
 Write-Host "`n✅ All services started!" -ForegroundColor Green

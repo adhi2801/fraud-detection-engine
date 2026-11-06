@@ -1,6 +1,6 @@
 {
   "provider": "python",
   "install": {
-    "cmd": "pip install -r deploy/requirements.txt"
+    "cmd": "pip install -r requirements.txt"
   }
 }

@@ -31,6 +31,42 @@ sess = rt.InferenceSession(MODEL_PATH)
 input_name = sess.get_inputs()[0].name
 print(f"Model loaded. Input: {input_name}")
 
+# The model was trained on the bank's anonymised PCA features (V1-V28) plus Amount and Time. Those features cannot be
+# derived from a bare card/amount/merchant/country request, so the model is only used when a caller supplies them
+# (`bank_features`); otherwise the request is scored by the behavioural rules below, and the response says which.
+N_BANK_FEATURES = 28
+SAMPLES_PATH = os.path.join(os.path.dirname(__file__), "samples", "heldout_transactions.json")
+with open(SAMPLES_PATH, encoding="utf-8") as fh:
+    SAMPLES = json.load(fh)
+
+
+def rule_score(amount, is_intl, txn_count, total_spend):
+    """Same rules as the Go pipeline's fallback scorer (detection/inference/scorer.go)."""
+    score = 0.0
+    if amount > 500:
+        score += 0.4
+    elif amount > 200:
+        score += 0.2
+    if is_intl:
+        score += 0.3
+    if txn_count > 10:
+        score += 0.2
+    if total_spend > 1000:
+        score += 0.2
+    return min(1.0, score)
+
+
+def parse_bank_features(raw):
+    """None if absent; a list of 28 floats if valid; raises ValueError otherwise."""
+    if raw is None:
+        return None
+    if not isinstance(raw, list) or len(raw) != N_BANK_FEATURES:
+        raise ValueError(f"bank_features must be a list of {N_BANK_FEATURES} numbers (V1-V28)")
+    values = [float(v) for v in raw]
+    if not all(np.isfinite(values)):
+        raise ValueError("bank_features must be finite numbers")
+    return values
+
 def get_sliding_window_features(card_id, amount, country):
     now = time.time()
     one_hour_ago = now - 3600
@@ -119,7 +155,7 @@ def update_profile(card_id, amount, country, merchant, hour):
     if hour not in profile["hours"]:
         profile["hours"].append(hour)
 
-def build_reasons(card_id, amount, country, merchant, txn_count, total_spend, anomaly, ring_score):
+def build_reasons(card_id, amount, country, merchant, txn_count, total_spend, anomaly, ring_score, ml_score=None):
     reasons = []
     profile = card_profiles[card_id]
     if profile["txn_count"] >= 5 and profile["avg_spend"] > 0:
@@ -135,8 +171,10 @@ def build_reasons(card_id, amount, country, merchant, txn_count, total_spend, an
         reasons.append(f"High velocity: {txn_count} transactions in last hour")
     if total_spend > 1000:
         reasons.append(f"High hourly spend: ${total_spend:.0f} in last hour")
+    if ml_score is not None and ml_score >= 0.5:
+        reasons.append(f"Bank-feature model gives a fraud probability of {ml_score:.0%}")
     if not reasons:
-        reasons.append("Statistical anomaly detected by ML model")
+        reasons.append("No risk signals found")
     return reasons
 
 @app.route("/evaluate", methods=["POST"])
@@ -146,8 +184,13 @@ def evaluate():
     if not data:
         return jsonify({"error": "invalid request"}), 400
 
+    try:
+        bank_features = parse_bank_features(data.get("bank_features"))
+        amount = float(data.get("amount_usd", 0))
+        time_seconds = float(data.get("time_seconds", time.time() % 172800))
+    except (TypeError, ValueError) as exc:
+        return jsonify({"error": str(exc)}), 400
     card_id = data.get("card_id", "unknown")
-    amount = float(data.get("amount_usd", 0))
     merchant = data.get("merchant_id", "unknown")
     country = data.get("country_code", "US")
     hour = datetime.now().hour
@@ -165,37 +208,20 @@ def evaluate():
     merchant_cards[merchant].append((time.time(), card_id))
     update_profile(card_id, amount, country, merchant, hour)
 
-    # Build 30-feature vector matching training data
-    # f0-f27 = V1-V28 (we use derived features as proxies)
-    # f28 = Amount, f29 = Time proxy
-    now_seconds = time.time() % 172800  # seconds within 2-day window like dataset
+    if bank_features is not None:
+        features = np.array([bank_features + [amount, time_seconds]], dtype=np.float32)
+        probs = sess.run(None, {input_name: features})[1]
+        ml_score = float(probs[0][1])
+        base_score, score_source = ml_score, "model"
+    else:
+        ml_score = None
+        base_score, score_source = rule_score(amount, is_intl, txn_count, total_spend), "rules"
 
-    # Create feature vector — V1-V28 are zeros for API calls
-    # (real bank system would provide these from payment network)
-    # We use what we have: amount, velocity, geography signals
-    v_features = [0.0] * 28  # V1-V28 placeholders
-
-    # Inject our behavioral signals into key V features
-    # These approximate what the bank's PCA features capture
-    v_features[0] = float(txn_count) / 10.0        # velocity signal → V1
-    v_features[1] = float(total_spend) / 1000.0     # spend signal → V2
-    v_features[2] = float(is_intl) * 2.0            # geography → V3
-    v_features[3] = float(anomaly) * 3.0            # behavioral anomaly → V4
-    v_features[4] = float(ring_score) * 2.0         # ring signal → V5
-    v_features[5] = float(distinct_merch) / 5.0     # merchant diversity → V6
-
-    features = np.array([
-        v_features + [float(amount), float(now_seconds)]
-    ], dtype=np.float32)
-
-    result = sess.run(None, {input_name: features})
-    ml_score = float(result[1][0][1])
-
-    # Combined score
-    combined = ml_score * 0.60 + anomaly * 0.25 + ring_score * 0.15
+    # Combined score: model (or rules when no bank features) + behavioural anomaly + fraud-ring signal
+    combined = base_score * 0.60 + anomaly * 0.25 + ring_score * 0.15
     is_fraud = combined >= threshold
 
-    reasons = build_reasons(card_id, amount, country, merchant, txn_count, total_spend, anomaly, ring_score)
+    reasons = build_reasons(card_id, amount, country, merchant, txn_count, total_spend, anomaly, ring_score, ml_score)
 
     elapsed = (time.perf_counter() - start) * 1000
 
@@ -205,7 +231,9 @@ def evaluate():
         "fraud_score": round(combined, 4),
         "is_fraud": is_fraud,
         "threshold": round(threshold, 4),
-        "ml_score": round(ml_score, 4),
+        "score_source": score_source,
+        "ml_score": None if ml_score is None else round(ml_score, 4),
+        "base_score": round(base_score, 4),
         "behavioral_anomaly": round(anomaly, 4),
         "ring_signal": round(ring_score, 4),
         "reasons": reasons,
@@ -217,18 +245,27 @@ def health():
     return jsonify({
         "status": "ok",
         "cards_tracked": len(card_profiles),
-        "model": "XGBoost — AUC 0.98 — trained on 284,807 real transactions"
+        "model": "XGBoost on the ULB credit-card dataset; held-out ROC-AUC 0.981, PR-AUC 0.882 "
+                 "(results/model_eval.json); used when bank_features are supplied"
     })
+
+
+@app.route("/samples", methods=["GET"])
+def samples():
+    """Real held-out transactions (never used for training) that can be replayed through /evaluate."""
+    return jsonify(SAMPLES)
 
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({
         "name": "Real-Time Fraud Detection Engine",
         "author": "Adhiswauran V",
-        "model_accuracy": "AUC-ROC: 0.9814",
-        "trained_on": "284,807 real credit card transactions",
+        "model": "XGBoost, held-out ROC-AUC 0.981 / PR-AUC 0.882 on the ULB credit-card dataset "
+                 "(284,807 transactions, 0.17% fraud)",
+        "scoring": "model when bank_features (V1-V28) are supplied, behavioural rules otherwise",
         "endpoints": {
             "POST /evaluate": "Evaluate a transaction for fraud",
+            "GET /samples": "Real held-out transactions with bank features, for replaying through /evaluate",
             "GET /health": "Health check and live stats",
             "GET /": "API documentation"
         },
@@ -334,7 +371,10 @@ def ui():
             <button class="preset-btn preset-fraud" onclick="setPreset('fraud1')">🚨 High Amount Abroad</button>
             <button class="preset-btn preset-fraud" onclick="setPreset('fraud2')">🚨 Velocity Attack</button>
             <button class="preset-btn" onclick="setPreset('travel')">✈️ Legitimate Travel</button>
+            <button class="preset-btn preset-fraud" onclick="replay('fraud')">🏦 Replay a real fraud</button>
+            <button class="preset-btn" onclick="replay('legit')">🏦 Replay a real legit payment</button>
         </div>
+        <p id="replay-note" style="color:#64748b;font-size:0.8em;margin:-8px 0 12px;display:none"></p>
 
         <label>Card ID</label>
         <input type="text" id="card_id" value="card-42" placeholder="e.g. card-42" />
@@ -405,6 +445,7 @@ def ui():
 
 <script>
     const history = [];
+    let bankFeatures = null, timeSeconds = null, samplesCache = null;
 
     function setPreset(type) {
         const presets = {
@@ -414,10 +455,25 @@ def ui():
             travel: { card: 'card-55', amount: 320, merchant: 'merch-004', country: 'GB' }
         };
         const p = presets[type];
+        bankFeatures = null; timeSeconds = null;
+        document.getElementById('replay-note').style.display = 'none';
         document.getElementById('card_id').value = p.card;
         document.getElementById('amount').value = p.amount;
         document.getElementById('merchant').value = p.merchant;
         document.getElementById('country').value = p.country;
+    }
+
+    async function replay(label) {
+        if (!samplesCache) samplesCache = await (await fetch('/samples')).json();
+        const pool = samplesCache.transactions.filter(t => t.label === label);
+        const s = pool[Math.floor(Math.random() * pool.length)];
+        bankFeatures = s.bank_features; timeSeconds = s.time_seconds;
+        document.getElementById('card_id').value = 'card-' + s.id;
+        document.getElementById('amount').value = s.amount_usd;
+        document.getElementById('country').value = 'US';
+        const note = document.getElementById('replay-note');
+        note.textContent = 'Real held-out transaction ' + s.id + ' (true label: ' + label + '); the model scores its bank features.';
+        note.style.display = 'block';
     }
 
     async function evaluate() {
@@ -431,6 +487,7 @@ def ui():
             merchant_id: document.getElementById('merchant').value,
             country_code: document.getElementById('country').value
         };
+        if (bankFeatures) { body.bank_features = bankFeatures; body.time_seconds = timeSeconds; }
 
         try {
             const res = await fetch('/evaluate', {
@@ -465,7 +522,8 @@ def ui():
         meter.style.width = score + '%';
         meter.className = 'meter-fill ' + (isFraud ? 'meter-fraud' : 'meter-safe');
 
-        document.getElementById('stat-ml').textContent = Math.round(data.ml_score * 100) + '%';
+        document.getElementById('stat-ml').textContent =
+            data.ml_score === null ? 'rules' : Math.round(data.ml_score * 100) + '%';
         document.getElementById('stat-anomaly').textContent = Math.round(data.behavioral_anomaly * 100) + '%';
         document.getElementById('stat-latency').textContent = data.latency_ms + 'ms';
 
